@@ -1,0 +1,113 @@
+#########################################################################
+# Uncomment this section after you have uploaded your own certificates. #
+#########################################################################
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      # sniStrict: true # not work def cert
+    mintls13:
+      minVersion: VersionTLS13
+     
+  certificates:
+    - certFile: "/certs/mycert.crt"
+      keyFile: "/certs/mykey.key"
+     
+
+http:
+  middlewares:
+    auth:
+      basicAuth:
+        users:
+          - "username:hashed_password"
+    http-to-https:
+      redirectscheme:
+        scheme: https
+        permanent: true
+
+    compress-response:
+      compress: true
+
+  routers:
+    grafana-http:
+      entryPoints:
+        - "web"
+      rule: "Host(`dev-grafana.${DOMAIN_NAME}`)"
+      service: grafana
+      middlewares:
+        - http-to-https
+        - compress-response
+          #resolver: "default"
+
+    prometheus-http:
+      entryPoints:
+        - "web"
+      rule: "Host(`dev-prometheus.${DOMAIN_NAME}`)"
+      service: prometheus
+      middlewares:
+        - auth
+        - http-to-https
+        - compress-response
+          #resolver: "default"
+
+    alertmanager-http:
+      entryPoints:
+        - "web"
+      rule: "Host(`dev-alertmanager.${DOMAIN_NAME}`)"
+      service: alertmanager
+      middlewares:
+        - auth
+        - http-to-https
+        - compress-response
+          #resolver: "default"
+
+    prometheus-https:
+      entryPoints:
+        - "websecure"
+      rule: "Host(`dev-prometheus.${DOMAIN_NAME}`)"
+      service: prometheus
+      middlewares:
+        - auth
+        - http-to-https
+        - compress-response
+      tls: {}
+        # resolver: "default"
+
+    alertmanager-https:
+      entryPoints:
+        - "websecure"
+      rule: "Host(`dev-alertmanager.${DOMAIN_NAME}`)"
+      service: alertmanager
+      middlewares:
+        - auth
+        - http-to-https
+        - compress-response
+      tls: {}
+        #resolver: "default"
+
+    grafana-https:
+      entryPoints:
+        - "websecure"
+      rule: "Host(`dev-grafana.${DOMAIN_NAME}`)"
+      service: grafana
+      middlewares:
+        - http-to-https
+        - compress-response
+      tls: {}
+        #resolver: "default"
+
+  services:
+    grafana:
+      loadBalancer:
+        servers:
+          - url: "http://grafana_ip:3000"
+
+    prometheus:
+      loadBalancer:
+        servers:
+          - url: "http://prometheus_ip:9090"
+
+    alertmanager:
+      loadBalancer:
+        servers:
+          - url: "http://alertmanager_ip:9093"
