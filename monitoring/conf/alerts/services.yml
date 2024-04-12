@@ -1,0 +1,21 @@
+groups:
+- name: monitoring_services
+  rules:
+    - alert: NodeExporterDown
+      expr: up{job='node-exporters'} == 0
+      for: 5m
+      labels:
+        severity: major
+      annotations:
+        summary: "NODE-EXPORTER DOWN: {{ $labels.instance }}"
+        description: "job {{ $labels.job }} on {{ $labels.instance }} is down for the last 5 minutes"
+        value: "{{ $value }}"
+    - alert: TestMher
+      expr: up{job='test-mher'} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "TEST-MHER DOWN: {{ $labels.instance }}"
+        description: "job {{ $labels.job }} on {{ $labels.instance }} is down for the last 5 minutes"
+        value: "{{ $value }}"

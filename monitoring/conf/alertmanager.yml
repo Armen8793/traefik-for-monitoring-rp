@@ -1,0 +1,93 @@
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: 'mail-ip:25'
+  smtp_from: 'no-reply@email'
+  smtp_require_tls: false
+
+templates:
+  - '/etc/alertmanager/*.tmpl'
+
+
+route:
+  receiver: 'dev-services'
+  repeat_interval: 10m
+  group_by: ['instance', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  routes:
+    - receiver: "dev-services"
+      group_wait: 10s
+      match_re:
+        severity: critical|warning
+      continue: true
+
+        #- receiver: "dev"
+        #group_wait: 10s
+        #match_re:
+        #severity: critical|warning
+        #continue: true
+
+    - receiver: "ansible-webhook"
+      group_wait: 10s
+      match_re:
+        severity: critical
+      continue: true
+
+        #- receiver: "telegram"
+        #group_wait: 10s
+        #match:
+        #alertname: "CurrencyExchangeStatus3Alert"
+        #continue: true
+
+    - receiver: "webhook"
+      group_wait: 30s
+      match:
+        alertname: "sp_getapplicationsbyprocessstatus_status_7_count"
+      continue: true
+
+
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match_re:
+      severity: 'major|minor|warning'
+    equal: ['alertname', 'instance']
+  - source_match:
+      severity: 'major'
+    target_match_re:
+      severity: 'minor|warning'
+    equal: ['alertname', 'instance']
+  - source_match:
+      severity: 'minor'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+
+receivers:
+
+  - name: 'dev-services'
+    slack_configs:
+    - api_url: 'slack-hook'
+      channel: '#warning'
+      send_resolved: true
+    email_configs:
+      - to: 'your-email'
+
+  - name: 'telegram'
+    telegram_configs:
+    - api_url: 'https://api.telegram.org'
+      chat_id: your-bot-chat-id
+      bot_token_file: /etc/alertmanager/telegram-bot-token.txt
+      send_resolved: true
+
+
+  - name: 'ansible-webhook'
+    webhook_configs:
+    - url: 'https://gitlab.com/api/v4/projects/146/ref/main/trigger/pipeline?token=your-webhook-token'
+
+
+  - name: 'webhook'
+    webhook_configs:
+    - url: 'http://webhook-ip:5000/alert'
+      send_resolved: true

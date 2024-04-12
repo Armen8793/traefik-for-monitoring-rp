@@ -1,0 +1,21 @@
+groups:
+- name: bb-probes
+  rules:
+  - alert: NodeDown
+    expr: probe_success{job =~ "bb-icmp"} == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "NODE DOWN: {{ $labels.instance }}"
+      description: "ICMP probes of {{$labels.instance}} were unsuccessful for more than 5 minutes"
+      value: "{{ $value }}"
+  - alert: SiteDown
+    expr: probe_success{job =~ "bb-http"} == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "HTTP SITE DOWN: {{$labels.instance}}"
+      description: "HTTP probes of {{$labels.instance}} were unsuccessful for more than 5 minutes"
+      value: "{{ $value }}"

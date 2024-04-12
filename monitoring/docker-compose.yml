@@ -1,0 +1,138 @@
+version: '3.8'
+services:
+  prometheus:
+    image: prom/prometheus
+    networks:
+      internal:
+      traefik_endpoint:
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      - ./conf/test-kube.yml:/etc/prometheus/prometheus.yml
+        #- ./conf/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./conf/alerts:/etc/prometheus/alerts
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: fluentbit-dns.am:24224
+        tag: monitoring.dev
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`dev-prometheus.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.prometheus.entrypoints=web"
+      - "traefik.http.routers.prometheus.tls=true"
+      #- "traefik.http.routers.prometheus-http.service=prometheus"
+      - "traefik.http.routers.prometheus.middlewares=auth@file,http-to-https@file,compress-response@file"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+
+  alertmanager:
+    image: prom/alertmanager
+      #networks:
+      #- internal
+    ports:
+      - "9093:9093"
+    networks:
+      internal:
+      traefik_endpoint:
+    volumes:
+      - alertmanager_data:/alertmanager
+      - ./conf/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+        #- ./template/telegram.tmpl:/etc/alertmanager/telegram.tmpl
+      - ./template/telegram-bot-token.txt:/etc/alertmanager/telegram-bot-token.txt
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: fluentbit-dns.am:24224
+        tag: monitoring.dev
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.alertmanager.rule=Host(`dev-alertmanager.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.alertmanager.entrypoints=web"
+      - "traefik.http.routers.alertmanager.tls=true"
+      - "traefik.http.routers.alertmanager.middlewares=auth@file,http-to-https@file,compress-response@file"
+      - "traefik.http.services.alertmanager.loadbalancer.server.port=9093"
+
+
+  grafana:
+    image: grafana/grafana
+    volumes:
+      - monitoring_grafana_data:/var/lib/grafana
+      - monitoring_provisioning:/etc/grafana/provisioning
+    restart: unless-stopped
+    environment:
+      #- GF_SECURITY_ADMIN_USER=admin
+      #- GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+        #    user: "472"
+    networks:
+      - internal
+      - traefik_endpoint
+    ports:
+      - "3000:3000"
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: fluentbit_dns.am:24224
+        tag: monitoring.dev
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`dev-grafana.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.grafana.entrypoints=web"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.routers.grafana.middlewares=auth@file,http-to-https@file,compress-response@file"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f localhost:3000/api/health && echo 'ready'"]
+      interval: 10s
+      retries: 30
+
+
+  blackbox:
+    image: prom/blackbox-exporter:master
+    #networks:
+    #  - internal
+    # - traefik_endpoint
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./conf/blackbox-test.yaml:/etc/blackbox-exporter/config.yml
+    command:
+      - '--config.file=/etc/blackbox-exporter/config.yml'
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: fluentbit_dns_name.am:24224
+        #tag: monitoring.dev
+
+        #node-exporter:
+        #image: quay.io/prometheus/node-exporter:latest
+        #hostname: 'nodexp-{{.Node.Hostname}}'
+        #volumes:
+        #- '/:/host:ro,rslave'
+        #ports:
+        # - "9100:9100"
+        #    networks:
+        #- monitoring_endpoint
+        #- internal
+        #logging:
+        #driver: "fluentd"
+        #options:
+        #fluentd-address: fluentbit-dev.fluentbit_ip.am:24224
+        #tag: monitoring.dev
+
+
+volumes:
+  alertmanager_data:
+  prometheus_data:
+  monitoring_grafana_data:
+  monitoring_provisioning:
+
+networks:
+  internal:
+    internal: true
+  traefik_endpoint:
+    external: true

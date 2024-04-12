@@ -1,0 +1,278 @@
+groups:
+  - name: custom_rules
+    rules:
+    - alert: PostgresqlDeadLocks
+      expr: increase(pg_stat_database_deadlocks{datname!~"template.*|postgres"}[1m]) > 5
+      for: 60s
+      labels:
+          service: postgresql
+          severity: warning
+          severity_num: 200
+      annotations:
+          summary: 'Postgresql dead locks (instance {{ $labels.job }})'
+          description: 'PostgreSQL has dead-locks\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}'
+
+    - alert: PostgresqlHighRateDeadlock
+      expr: increase(postgresql_errors_total{type="deadlock_detected"}[1m]) > 1
+      for: 60s
+      labels:
+          service: postgresql
+          severity: critical
+          severity_num: 300
+      annotations:
+          summary: 'Postgresql high rate deadlock (instance {{ $labels.job }})'
+          description: 'Postgres detected deadlocks\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}'
+
+    - alert: PostgresqlTooManyLocksAcquired
+      expr: ((sum (pg_locks_count)) / (pg_settings_max_locks_per_transaction * pg_settings_max_connections)) > 0.20
+      for: 2m
+      labels:
+          service: postgresql
+          severity: critical
+          severity_num: 300
+      annotations:
+          summary: 'Postgresql too many locks acquired (instance {{ $labels.job }})'
+          description: 'Too many locks acquired on the database. If this alert happens frequently, we may need to increase the postgres setting max_locks_per_transaction.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}'
+
+    - alert: PostgresqlRestarted
+      expr: time() - pg_postmaster_start_time_seconds < 60
+      for: 0m
+      labels:
+          service: postgresql
+          severity: critical
+          severity_num: 300
+      annotations:
+          summary: 'Postgresql restarted (instance {{ $labels.job }})'
+          description: 'Postgresql restarted\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}'
+
+    #  See https://github.com/samber/awesome-prometheus-alerts/issues/289#issuecomment-1164842737
+    - alert: PostgresqlBloatIndexHigh(>90%)
+      expr: pg_bloat_btree_bloat_pct > 90 and on (idxname) (pg_bloat_btree_real_size > 100000000)
+      for: 1h
+      labels:
+          service: postgresql
+          severity: warning
+          severity_num: 200
+      annotations:
+          summary: 'Postgresql bloat index high (> 90%) (instance {{ $labels.job }})'
+          description: 'The index {{ $labels.idxname }} is bloated. You should execute `REINDEX INDEX CONCURRENTLY {{ $labels.idxname }};`\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}'
+
+    #  See https://github.com/samber/awesome-prometheus-alerts/issues/289#issuecomment-1164842737
+    - alert: PostgresqlBloatTableHigh(>90%)
+      expr: pg_bloat_table_bloat_pct > 90 and on (relname) (pg_bloat_table_real_size > 200000000)
+      for: 1h
+      labels:
+          service: postgresql
+          severity: warning
+          severity_num: 200
+      annotations:
+          summary: 'Postgresql bloat table high (> 90%) (instance {{ $labels.job }})'
+          description: 'The table {{ $labels.relname }} is bloated. You should execute `VACUUM {{ $labels.relname }};`\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}'
+
+    ########## EXPORTER RULES ##########
+    - alert: PGExporterScrapeError
+      expr: pg_exporter_last_scrape_error > 0
+      for: 60s
+      labels:
+          service: postgresql
+          severity: critical
+          severity_num: 300
+      annotations:
+          summary: 'Postgres Exporter running on {{ $labels.job }} (instance: {{ $labels.instance }}) is encountering scrape errors processing queries. Error count: ( {{ $value }} )'
+
+    ########## POSTGRESQL RULES ##########
+    - alert: PGIsUp
+      expr: pg_up < 1
+      for: 60s
+      labels:
+          service: postgresql
+          severity: critical
+          severity_num: 300
+      annotations:
+          summary: 'postgres_exporter running on {{ $labels.job }} is unable to communicate with the configured database'
+
+    ## Monitor for a failover event by checking if the recovery status value has changed within the specified time period
+    ## IMPORTANT NOTE: This alert will *automatically resolve* after the given offset time period has passed! If you desire to have an alert that must be manually resolved, see the commented out alert beneath this one
+    - alert: PGRecoveryStatusSwitch
+      expr: ccp_is_in_recovery_status != ccp_is_in_recovery_status offset 5m
+      for: 60s
+      labels:
+          service: postgresql
+          severity: critical
+          severity_num: 300
+      annotations:
+          summary: '{{ $labels.job }} has had a PostgreSQL failover event. Please check systems involved in this cluster for more details'
+
+    - alert: PGIdleTxn
+      expr: ccp_connection_stats_max_idle_in_txn_time > 300
+      for: 60s
+      labels:
+          service: postgresql
+          severity: warning
+          severity_num: 200
+      annotations:
+          description: '{{ $labels.job }} has at least one session idle in transaction for over 5 minutes.'
+          summary: 'PGSQL Instance idle transactions'
+
+    - alert: PGQueryTime
+      expr: ccp_connection_stats_max_query_time > 43200
+      for: 60s
+      labels:
+          service: postgresql
+          severity: warning
+          severity_num: 200
+      annotations:
+          description: '{{ $labels.job }} has at least one query running for over 12 hours.'
+          summary: 'PGSQL Max Query Runtime'
+
+    - alert: PGQueryTime
+      expr: ccp_connection_stats_max_query_time > 86400
+      for: 60s
+      labels:
+          service: postgresql
+          severity: critical
+          severity_num: 300
+      annotations:
+          description: '{{ $labels.job }} has at least one query running for over 1 day.'
+          summary: 'PGSQL Max Query Runtime'
+
+    - alert: PGConnPerc
+      expr: 100 * (ccp_connection_stats_total / ccp_connection_stats_max_connections) > 85
+      for: 60s
+      labels:
+          service: postgresql
+          severity: warning
+          severity_num: 200
+      annotations:
+          description: '{{ $labels.job }} is using 85% or more of available connections ({{ $value }}%)'
+          summary: 'PGSQL Instance connections'
+
+    - alert: PGConnPerc
+      expr: 100 * (ccp_connection_stats_total / ccp_connection_stats_max_connections) > 95
+      for: 60s
+      labels:
+          service: postgresql
+          severity: critical
+          severity_num: 300
+      annotations:
+          description: '{{ $labels.job }} is using 95% or more of available connections ({{ $value }}%)'
+          summary: 'PGSQL Instance connections'
+
+    - alert: PGReplicationByteLag
+      expr: ccp_replication_lag_size_bytes > 5.24288e+07
+      for: 60s
+      labels:
+          service: postgresql
+          severity: warning
+          severity_num: 200
+      annotations:
+          description: 'PGSQL Instance {{ $labels.job }} has at least one replica lagging over 50MB behind.'
+          summary: 'PGSQL Instance replica lag warning'
+
+    - alert: PGReplicationByteLag
+      expr: ccp_replication_lag_size_bytes > 1.048576e+08
+      for: 60s
+      labels:
+          service: postgresql
+          severity: critical
+          severity_num: 300
+      annotations:
+          description: 'PGSQL Instance {{ $labels.job }} has at least one replica lagging over 100MB behind.'
+          summary: 'PGSQL Instance replica lag warning'
+
+    - alert: PGReplicationSlotsInactive
+      expr: ccp_replication_slots_active == 0
+      for: 60s
+      labels:
+          service: postgresql
+          severity: critical
+          severity_num: 300
+      annotations:
+          description: 'PGSQL Instance {{ $labels.job }} has one or more inactive replication slots'
+          summary: 'PGSQL Instance inactive replication slot'
+
+    - alert: PGXIDWraparound
+      expr: ccp_transaction_wraparound_percent_towards_wraparound > 75
+      for: 60s
+      labels:
+          service: postgresql
+          severity: warning
+          severity_num: 200
+      annotations:
+          description: 'PGSQL Instance {{ $labels.job }} is over 75% towards transaction id wraparound.'
+          summary: 'PGSQL Instance {{ $labels.job }} transaction id wraparound imminent'
+
+    - alert: PGXIDWraparound
+      expr: ccp_transaction_wraparound_percent_towards_wraparound > 95
+      for: 60s
+      labels:
+          service: postgresql
+          severity: critical
+          severity_num: 300
+      annotations:
+          description: 'PGSQL Instance {{ $labels.job }} is over 95% towards transaction id wraparound.'
+          summary: 'PGSQL Instance transaction id wraparound imminent'
+
+    - alert: PGEmergencyVacuum
+      expr: ccp_transaction_wraparound_percent_towards_emergency_autovac > 110
+      for: 60s
+      labels:
+          service: postgresql
+          severity: warning
+          severity_num: 200
+      annotations:
+          description: 'PGSQL Instance {{ $labels.job }} is over 110% beyond autovacuum_freeze_max_age value. Autovacuum may need tuning to better keep up.'
+          summary: 'PGSQL Instance emergency vacuum imminent'
+
+    - alert: PGEmergencyVacuum
+      expr: ccp_transaction_wraparound_percent_towards_emergency_autovac > 125
+      for: 60s
+      labels:
+          service: postgresql
+          severity: critical
+          severity_num: 300
+      annotations:
+          description: 'PGSQL Instance {{ $labels.job }} is over 125% beyond autovacuum_freeze_max_age value. Autovacuum needs tuning to better keep up.'
+          summary: 'PGSQL Instance emergency vacuum imminent'
+
+    - alert: PGArchiveCommandStatus
+      expr: ccp_archive_command_status_seconds_since_last_fail > 300
+      for: 60s
+      labels:
+          service: postgresql
+          severity: critical
+          severity_num: 300
+      annotations:
+          description: 'PGSQL Instance {{ $labels.job }} has a recent failing archive command'
+          summary: 'Seconds since the last recorded failure of the archive_command'
+
+    - alert: PGSequenceExhaustion
+      expr: ccp_sequence_exhaustion_count > 0
+      for: 60s
+      labels:
+          service: postgresql
+          severity: critical
+          severity_num: 300
+      annotations:
+          description: 'Count of sequences on instance {{ $labels.job }} at over 75% usage: {{ $value }}. Run following query to see full sequence status: SELECT * FROM monitor.sequence_status() WHERE percent >= 75'
+
+    - alert: PGSettingsPendingRestart
+      expr: ccp_settings_pending_restart_count > 0
+      for: 60s
+      labels:
+          service: postgresql
+          severity: critical
+          severity_num: 300
+      annotations:
+          description: 'One or more settings in the pg_settings system catalog on system {{ $labels.job }} are in a pending_restart state. Check the system catalog for which settings are pending and review postgresql.conf for changes.'
+
+    - alert: PostgresqlConfigurationChanged
+      expr: 'absent(pg_settings) == 0'
+      for: 0m
+      labels:
+          service: postgresql
+          severity: warning
+          severity_num: 200
+      annotations:
+          #summary: 'Postgresql configuration changed (instance {{ $labels.job }})'
+          description: 'Postgres Database configuration change has occurred\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}'

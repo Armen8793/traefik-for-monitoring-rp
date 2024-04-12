@@ -1,0 +1,170 @@
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+rule_files:
+  - ./alerts/psql-rules.yaml
+  - ./alerts/services.alerts.yml
+  - ./alerts/status7.yml
+
+alerting:
+  alertmanagers:
+    #- scheme: http
+    - static_configs:
+      - targets:
+        - 'monitoring-server-ip:9093'
+
+scrape_configs:
+- job_name: 'bb-icmp'
+  metrics_path: '/probe'
+  params:
+    module: ['http_2xx']
+  static_configs:
+    - targets:
+      - 'https://you-host-dns/'
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: monitoring-server-ip:9115
+
+
+- job_name: 'prometheus'
+  static_configs:
+    - targets: ['prometheus-ip:9090']
+
+- job_name: 'node-exporter'
+  static_configs:
+    - targets:
+          - 'your-nodes-and-servers-ips:9100'
+          
+
+- job_name: 'kafka-jmx-exporter'
+  static_configs:
+    - targets:
+          - 'kafka1:7071'
+          - 'kafka2:7071'
+          - 'kafka3:7071'
+
+
+
+- job_name: 'gitlab-server'
+  metrics_path: '/-/metrics'
+  scheme: 'https'
+  static_configs:
+    - targets:
+      - 'your-gitlab-dns'
+
+
+- job_name: 'dev-sentry'
+  metrics_path: '/metrics'
+  bearer_token: 'your-bearer'
+  static_configs:
+  - targets:
+    - 'sentry:80'
+
+- job_name: 'sonarqube'
+  metrics_path: '/metrics'
+  bearer_token: 'your-bearer'
+  static_configs:
+  - targets:
+    - 'sonar-ip:9187'
+
+- job_name: 'gitlab-runner'
+  metrics_path: '/metrics'
+  static_configs:
+      - targets:
+        - 'runners-ip:9323'
+
+- job_name: 'consul-psql'
+  honor_timestamps: true
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  metrics_path: '/metrics'
+  static_configs:
+  - targets:
+    - 'postgres1:9107'
+    - 'postgres2:9107'
+    - 'postgres3:9107'
+
+- job_name: 'consul'
+  bearer_token: 'your-bearer'
+  honor_timestamps: true
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  metrics_path: '/v1/agent/metrics'
+  params:
+    format: ['prometheus']
+  static_configs:
+  - targets:
+    - 'postgres1:8500'
+    - 'postgres2:8500'
+    - 'postgres3:8500'
+
+
+- job_name: 'consul-server'
+  bearer_token: 'your-bearer-token'
+  honor_timestamps: true
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  metrics_path: '/v1/agent/metrics'
+  params:
+    format: ['prometheus']
+  static_configs:
+  - targets:
+    - 'consul1:8500'
+    - 'consul2:8500'
+    - 'consul3:8500'
+
+
+- job_name: 'patroni'
+  metrics_path: '/metrics'
+  static_configs:
+      - targets:
+        - 'postgres1:8008'
+        - 'postgres2:8008'
+        - 'postgres3:8008'
+
+- job_name: 'kafka-exporter'
+  metrics_path: '/metrics'
+  static_configs:
+      - targets:
+        - 'kafka1:9308'
+        - 'kafka2:9308'
+        - 'kafka3:9308'
+
+- job_name: 'pgbouncer'
+  metrics_path: '/metrics'
+  static_configs:
+      - targets:
+        - 'postgres-node-1-dns:9127'
+        - 'postgres-node-2-dns:9127'
+        - 'postgres-node-3-dns:9127'
+
+- job_name: 'postgres'
+  metrics_path: '/metrics'
+  static_configs:
+      - targets:
+        - 'node-1-dns:9187'
+        - 'node-2-dns:9187'
+        - 'node-3-dns:9187'
+
+
+- job_name: minio-job
+  bearer_token: your-bearer-token
+  metrics_path: /minio/v2/metrics/cluster
+  scheme: http
+  static_configs:
+    - targets: ['ip:9000']
+
+- job_name: 'kubernetes-apiservers'
+  static_configs:
+    - targets: ['dns:443']
+  metrics_path: /metrics
+  scheme: https
+  tls_config:
+    insecure_skip_verify: true
+  basic_auth:
+    username: user
+    password: password
